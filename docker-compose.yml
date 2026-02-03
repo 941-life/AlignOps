@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: dataops-api
+    ports:
+      - "8000:8000"
+    env_file: .env
+    networks:
+      - dataops-network
+
+  # ui:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.ui
+  #   container_name: dataops-ui
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - NEXT_PUBLIC_API_URL=http://localhost:8000 
+  #   depends_on:
+  #     - api
+  #   networks:
+  #     - dataops-network
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: dataops-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - dataops-network
+
+
+networks:
+  dataops-network:
+    driver: bridge
+
+volumes:
+  qdrant_data:

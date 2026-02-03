@@ -1,0 +1,16 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# 패키지 설치
+COPY ./frontend/package.json ./frontend/package-lock.json* ./
+RUN npm install
+
+# 소스 복사 및 빌드
+COPY ./frontend .
+# 만약 Next.js나 Vite라면 빌드 명령어를 실행하거나 dev 모드로 실행
+# RUN npm run build 
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]
