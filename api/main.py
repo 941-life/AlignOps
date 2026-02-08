@@ -1,9 +1,9 @@
 import logging
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Optional
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 
-from api.models import DatasetObject, L1Report, L2Reasoning, StatusEnum
+from api.models import DatasetObject, L1Report, L2Reasoning, StatusEnum, StatusHistoryItem
 from api.services.gemini_svc import GeminiService
 from api.services.math_utils import cosine_distance
 from api.services.pipeline import DataPipeline
@@ -20,10 +20,30 @@ gemini_svc = GeminiService()
 # - L2 WARN: requires human-in-the-loop decision.
 # - L2 BLOCK: blocked by semantic audit.
 # - MANUAL PASS: human override to PASS when needed.
-def apply_status(ds: DatasetObject, status: StatusEnum, source: Literal["L1", "L2", "MANUAL"]):
+def apply_status(
+    ds: DatasetObject,
+    status: StatusEnum,
+    source: Literal["SYSTEM", "L1", "L2", "MANUAL"],
+    reason: Optional[str] = None,
+):
     ds.status = status
     ds.status_source = source
+    ds.status_history.append(
+        StatusHistoryItem(
+            status=status,
+            source=source,
+            reason=reason,
+        )
+    )
     logging.info("Dataset %s status changed to %s by %s", ds.dataset_id, status, source)
+
+
+def build_l1_reason(report: L1Report) -> str:
+    return (
+        f"schema_passed={report.schema_passed}, "
+        f"volume={report.volume_actual}/{report.volume_expected}, "
+        f"freshness_delay_sec={report.freshness_delay_sec}"
+    )
 
 
 async def start_ingestion_task(dataset: DatasetObject, raw_data: List[dict]):
@@ -31,7 +51,7 @@ async def start_ingestion_task(dataset: DatasetObject, raw_data: List[dict]):
         await pipeline.process_ingestion(dataset.dataset_id, dataset.version, raw_data)
     except Exception as exc:
         logging.error("Ingestion failed: %s", exc)
-        apply_status(dataset, StatusEnum.BLOCK, "L1")
+        apply_status(dataset, StatusEnum.BLOCK, "L1", reason=f"Ingestion failed: {exc}")
 
 
 @app.post("/datasets/", response_model=DatasetObject)
@@ -40,7 +60,7 @@ async def create_dataset_version(dataset: DatasetObject, raw_data: List[dict], b
     if key in dataset_registry:
         raise HTTPException(status_code=400, detail="Version already exists")
 
-    dataset.status = StatusEnum.VALIDATING
+    apply_status(dataset, StatusEnum.VALIDATING, "SYSTEM", reason="Dataset version created")
     dataset_registry[key] = dataset
     background_tasks.add_task(start_ingestion_task, dataset, raw_data)
     return dataset
@@ -55,7 +75,7 @@ async def update_l1_result(dataset_id: str, version: str, report: L1Report):
 
     ds.l1_report = report
     target_status = StatusEnum.BLOCK if report.l1_status == StatusEnum.BLOCK else report.l1_status
-    apply_status(ds, target_status, "L1")
+    apply_status(ds, target_status, "L1", reason=build_l1_reason(report))
     return ds
 
 
@@ -70,7 +90,8 @@ async def update_l2_audit(dataset_id: str, version: str, audit: L2Reasoning):
         raise HTTPException(status_code=400, detail="Blocked by L1")
 
     ds.l2_reasoning = audit
-    apply_status(ds, audit.l2_status, "L2")
+    reason = audit.judgment_summary.strip() if audit.judgment_summary else None
+    apply_status(ds, audit.l2_status, "L2", reason=reason or None)
     return ds
 
 
@@ -96,15 +117,26 @@ async def trigger_l2_audit(dataset_id: str, version: str):
             detail="Missing vector data. Both v1 and v2 vectors must exist in Qdrant.",
         )
 
-    try:
-        cosine_mean_shift = cosine_distance(mean_v1, mean_v2)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Unable to compute drift: {exc}") from exc
+    cosine_mean_shift = cosine_distance(mean_v1, mean_v2)
+    drift_stats = {"cosine_mean_shift": float(cosine_mean_shift)}
 
-    sample_images, sample_captions = pipeline.vdb.get_samples(dataset_id, "v2", limit=5)
-    if not sample_images or not sample_captions:
-        raise HTTPException(status_code=400, detail="No v2 samples found for Gemini audit")
+    outlier_samples = pipeline.vdb.get_outlier_samples(
+        dataset_id=dataset_id,
+        version="v2",
+        mean_v1=mean_v1,
+        mean_v2=mean_v2,
+        limit=5,
+    )
+    if len(outlier_samples) < 3:
+        raise HTTPException(status_code=400, detail="Need at least 3 outlier samples for L2 audit")
 
-    drift_stats = {"cosine_mean_shift": cosine_mean_shift}
-    audit_result = await gemini_svc.audit_dataset(drift_stats, sample_images, sample_captions)
+    sample_images = [item["image_url"] for item in outlier_samples]
+    sample_captions = [item["caption"] for item in outlier_samples]
+
+    audit_result = await gemini_svc.audit_dataset(
+        drift_stats,
+        sample_images,
+        sample_captions,
+        outlier_context=outlier_samples,
+    )
     return await update_l2_audit(dataset_id, version, audit_result)

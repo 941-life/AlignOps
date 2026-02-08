@@ -65,6 +65,63 @@ class QdrantServiceTests(unittest.TestCase):
         self.assertEqual(payload["image_fetch_status"], "FAIL")
         self.assertEqual(payload["fallback_used"], True)
 
+    def test_get_outlier_samples_returns_descending_score(self):
+        service = QdrantService()
+        service.client = Mock()
+        service.client.collection_exists.return_value = True
+        service.client.scroll.side_effect = [
+            (
+                [
+                    SimpleNamespace(
+                        vector=[1.0, 0.0],
+                        payload={"image_url": "img-near", "caption": "cap-near", "source_id": "s1"},
+                    ),
+                    SimpleNamespace(
+                        vector=[-1.0, 0.0],
+                        payload={"image_url": "img-far", "caption": "cap-far", "source_id": "s2"},
+                    ),
+                ],
+                None,
+            )
+        ]
+
+        outliers = service.get_outlier_samples(
+            dataset_id="demo",
+            version="v2",
+            mean_v1=[1.0, 0.0],
+            mean_v2=[1.0, 0.0],
+            limit=5,
+        )
+
+        self.assertEqual(len(outliers), 2)
+        self.assertEqual(outliers[0]["image_url"], "img-far")
+        self.assertGreater(outliers[0]["outlier_score"], outliers[1]["outlier_score"])
+
+    def test_get_outlier_samples_filters_missing_payload(self):
+        service = QdrantService()
+        service.client = Mock()
+        service.client.collection_exists.return_value = True
+        service.client.scroll.side_effect = [
+            (
+                [
+                    SimpleNamespace(vector=[1.0, 0.0], payload={"caption": "no-image"}),
+                    SimpleNamespace(vector=[1.0, 0.0], payload={"image_url": "ok", "caption": "ok"}),
+                ],
+                None,
+            )
+        ]
+
+        outliers = service.get_outlier_samples(
+            dataset_id="demo",
+            version="v2",
+            mean_v1=[1.0, 0.0],
+            mean_v2=[1.0, 0.0],
+            limit=5,
+        )
+
+        self.assertEqual(len(outliers), 1)
+        self.assertEqual(outliers[0]["image_url"], "ok")
+
 
 if __name__ == "__main__":
     unittest.main()

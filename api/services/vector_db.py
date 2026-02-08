@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -10,6 +11,12 @@ from qdrant_client.models import (
     PointStruct,
     VectorParams,
 )
+
+from api.services.math_utils import cosine_distance
+
+
+logger = logging.getLogger(__name__)
+
 
 class QdrantService:
     def __init__(self):
@@ -143,6 +150,79 @@ class QdrantService:
         if count == 0:
             return None
         return [v / count for v in sum_vector]
+
+    def get_outlier_samples(
+        self,
+        dataset_id: str,
+        version: str,
+        mean_v1: List[float],
+        mean_v2: List[float],
+        limit: int = 5,
+    ) -> List[Dict[str, Any]]:
+        if limit <= 0 or not self.client.collection_exists(self.collection_name):
+            return []
+
+        filter_query = self._dataset_version_filter(dataset_id, version)
+        offset: Optional[Any] = None
+        ranked_samples: List[Dict[str, Any]] = []
+
+        while True:
+            points, next_offset = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=filter_query,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=True,
+            )
+
+            if not points:
+                break
+
+            for point in points:
+                payload = point.payload or {}
+                image_url = payload.get("image_url")
+                caption = payload.get("caption")
+                if image_url is None or caption is None:
+                    continue
+
+                vector = self._extract_vector(point)
+                if vector is None:
+                    continue
+
+                if len(vector) != len(mean_v1) or len(vector) != len(mean_v2):
+                    logger.warning(
+                        "Skipping point %s due to vector dimension mismatch (%s vs %s/%s)",
+                        getattr(point, "id", "unknown"),
+                        len(vector),
+                        len(mean_v1),
+                        len(mean_v2),
+                    )
+                    continue
+
+                dist_to_v2_mean = cosine_distance(vector, mean_v2)
+                dist_to_v1_mean = cosine_distance(vector, mean_v1)
+                outlier_score = 0.5 * dist_to_v2_mean + 0.5 * dist_to_v1_mean
+
+                ranked_samples.append(
+                    {
+                        "image_url": str(image_url),
+                        "caption": str(caption),
+                        "source_id": payload.get("source_id"),
+                        "image_fetch_status": payload.get("image_fetch_status"),
+                        "fallback_used": bool(payload.get("fallback_used", False)),
+                        "dist_to_v2_mean": float(dist_to_v2_mean),
+                        "dist_to_v1_mean": float(dist_to_v1_mean),
+                        "outlier_score": float(outlier_score),
+                    }
+                )
+
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        ranked_samples.sort(key=lambda item: item["outlier_score"], reverse=True)
+        return ranked_samples[:limit]
 
     def get_samples(self, dataset_id: str, version: str, limit: int = 5) -> Tuple[List[str], List[str]]:
         if limit <= 0 or not self.client.collection_exists(self.collection_name):

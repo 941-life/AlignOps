@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from google import genai
 
@@ -24,16 +24,20 @@ class GeminiService:
         drift_data: Dict[str, float],
         sample_images: List[str],
         sample_captions: List[str],
+        outlier_context: Optional[List[Dict[str, Any]]] = None,
     ) -> L2Reasoning:
         system_prompt = """
         You are a VLM dataset auditor.
         Review image-text samples and drift statistics, then decide alignment status.
+        These are statistically most-outlying samples (lowest similarity cohort).
+        Assess whether these outliers also indicate semantic misalignment.
         Return strict JSON that matches the provided schema.
         """
 
         user_content = f"""
         [Drift Stats]: {drift_data}
         [Samples]: {list(zip(sample_images, sample_captions))}
+        [Outlier Context]: {outlier_context or []}
         """
 
         response = self._get_client().models.generate_content(
