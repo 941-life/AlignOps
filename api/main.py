@@ -95,6 +95,33 @@ async def update_l2_audit(dataset_id: str, version: str, audit: L2Reasoning):
     return ds
 
 
+@app.get("/datasets/")
+async def list_all_datasets():
+    """List all datasets with their latest version information."""
+    dataset_map: Dict[str, Dict] = {}
+    
+    for ds in dataset_registry.values():
+        if ds.dataset_id not in dataset_map:
+            dataset_map[ds.dataset_id] = {
+                "dataset_id": ds.dataset_id,
+                "latest_version": ds.version,
+                "status": ds.status,
+                "status_source": ds.status_source,
+                "last_evaluated": ds.created_at,
+                "total_versions": 1,
+            }
+        else:
+            dataset_map[ds.dataset_id]["total_versions"] += 1
+            # Update if this version is newer
+            if ds.created_at > dataset_map[ds.dataset_id]["last_evaluated"]:
+                dataset_map[ds.dataset_id]["latest_version"] = ds.version
+                dataset_map[ds.dataset_id]["status"] = ds.status
+                dataset_map[ds.dataset_id]["status_source"] = ds.status_source
+                dataset_map[ds.dataset_id]["last_evaluated"] = ds.created_at
+    
+    return list(dataset_map.values())
+
+
 @app.get("/datasets/{dataset_id}", response_model=List[DatasetObject])
 async def list_versions(dataset_id: str):
     return [d for d in dataset_registry.values() if d.dataset_id == dataset_id]

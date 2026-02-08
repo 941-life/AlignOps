@@ -12,19 +12,20 @@ services:
     networks:
       - dataops-network
 
-  # ui:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.ui
-  #   container_name: dataops-ui
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     - NEXT_PUBLIC_API_URL=http://localhost:8000 
-  #   depends_on:
-  #     - api
-  #   networks:
-  #     - dataops-network
+  ui:
+    build:
+      context: ./ui
+      dockerfile: ../Dockerfile.ui
+    container_name: dataops-ui
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_USE_MOCKS=false
+    depends_on:
+      - api
+    networks:
+      - dataops-network
 
   qdrant:
     image: qdrant/qdrant:latest
