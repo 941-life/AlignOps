@@ -1,0 +1,26 @@
+{
+  "v1": [
+    {"image_url": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b", "caption": "A majestic mountain range under a clear blue sky", "source_id": "cam_01"},
+    {"image_url": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e", "caption": "A peaceful tropical beach with white sand and palm trees", "source_id": "cam_02"},
+    {"image_url": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e", "caption": "Sunlight streaming through the trees in a lush green forest", "source_id": "cam_01"},
+    {"image_url": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05", "caption": "Foggy morning in the countryside with rolling hills", "source_id": "cam_03"},
+    {"image_url": "https://images.unsplash.com/photo-1501785888041-af3ef285b470", "caption": "A calm lake reflecting the surrounding mountains at sunset", "source_id": "cam_02"},
+    {"image_url": "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d", "caption": "A wooden bridge crossing a small stream in the woods", "source_id": "cam_01"},
+    {"image_url": "https://images.unsplash.com/photo-1433086177607-458da452403b", "caption": "A beautiful waterfall flowing into a rocky pool", "source_id": "cam_03"},
+    {"image_url": "https://images.unsplash.com/photo-1500382017468-9049fed747ef", "caption": "An open field of green grass under a dramatic sky", "source_id": "cam_01"},
+    {"image_url": "https://images.unsplash.com/photo-1426604966848-d7adac402bdb", "caption": "Snow-capped peaks in the distance with a forest in the foreground", "source_id": "cam_02"},
+    {"image_url": "https://images.unsplash.com/photo-1469474968028-56623f02e42e", "caption": "A person standing on a cliff overlooking a vast canyon", "source_id": "cam_03"}
+  ],
+  "v2": [
+    {"image_url": "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df", "caption": "A busy city street with tall buildings and traffic", "source_id": "cam_01"},
+    {"image_url": "https://images.unsplash.com/photo-1449824913935-59a10b8d2000", "caption": "Modern architecture with glass windows in a metropolitan area", "source_id": "cam_02"},
+    {"image_url": "https://images.unsplash.com/photo-1493246507139-91e8bef99c17", "caption": "Bright neon lights and signs on a city building at night", "source_id": "cam_01"},
+    {"image_url": "https://images.unsplash.com/photo-1514565131-fce0801e5785", "caption": "A view of the city skyline during the blue hour", "source_id": "cam_03"},
+    {"image_url": "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b", "caption": "A yellow taxi driving through a crowded urban intersection", "source_id": "cam_02"},
+    {"image_url": "https://images.unsplash.com/photo-1444723121867-7a241cacace9", "caption": "Residential houses in a quiet suburban neighborhood", "source_id": "cam_01"},
+    {"image_url": "https://images.unsplash.com/photo-1496568816309-51d7c20e3b21", "caption": "High-speed train passing through a modern station", "source_id": "cam_03"},
+    {"image_url": "https://images.unsplash.com/photo-1518005020411-38b814eb0ef5", "caption": "A close-up of a futuristic building's geometric facade", "source_id": "cam_01"},
+    {"image_url": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b", "caption": "A tropical beach with palm trees", "source_id": "cam_02"},
+    {"image_url": "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df", "caption": "A peaceful mountain landscape with a lake", "source_id": "cam_03"}
+  ]
+}

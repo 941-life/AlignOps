@@ -13,23 +13,23 @@ AlignOps provides multi-layer validation for vision-language datasets:
 ## Architecture
 
 ```
-┌─────────────┐
-│   Frontend  │ Next.js + TanStack Query
-│  (Port 3000)│
-└─────┬───────┘
-      │
-      ├─────────┐
-      │         │
-┌─────▼─────┐ ┌▼────────────┐
-│  FastAPI  │ │   Qdrant    │
-│(Port 8000)│ │ Vector DB   │
-└─────┬─────┘ └─────────────┘
-      │
-      ▼
-┌─────────────┐
-│   Gemini    │
-│  (L2 Audit) │
-└─────────────┘
+??????????????????????????????
+??  Frontend  ??Next.js + TanStack Query
+?? (Port 3000)??
+??????????????????????????????
+      ??
+      ??????????????????????
+      ??        ??
+???????????????????????????????????????????????????????
+?? FastAPI  ????  Qdrant    ??
+??Port 8000)????Vector DB   ??
+????????????????????????????????????????????????????????
+      ??
+      ??
+??????????????????????????????
+??  Gemini    ??
+?? (L2 Audit) ??
+??????????????????????????????
 ```
 
 ## Quick Start
@@ -78,35 +78,37 @@ Full specification: `docs/API_SPEC.md`
 
 ```
 .
-├── api/                    # FastAPI backend
-│   ├── main.py            # API routes
-│   ├── models/            # Pydantic models
-│   │   └── datasets.py
-│   └── services/          # Business logic
-│       ├── embedder.py    # Image-text embedding
-│       ├── gemini_svc.py  # L2 semantic audit
-│       ├── ingestor.py    # Data ingestion
-│       ├── pipeline.py    # Orchestration
-│       └── vector_db.py   # Qdrant interface
-├── ui/                    # Next.js frontend
-│   ├── app/              # Pages (App Router)
-│   ├── components/       # React components
-│   ├── lib/              # API client & types
-│   └── mocks/            # MSW handlers
-├── docs/
-│   └── API_SPEC.md       # Complete API documentation
-├── tests/                # Python tests
-├── docker-compose.yml
-└── requirements.txt
+?????? api/                    # FastAPI backend
+??  ?????? main.py            # API routes
+??  ?????? models/            # Pydantic models
+??  ??  ?????? datasets.py
+??  ?????? services/          # Business logic
+??      ?????? embedder.py    # Image-text embedding
+??      ?????? gemini_svc.py  # L2 semantic audit
+??      ?????? ingestor.py    # Data ingestion
+??      ?????? pipeline.py    # Orchestration
+??      ?????? vector_db.py   # Qdrant interface
+?????? ui/                    # Next.js frontend
+??  ?????? app/              # Pages (App Router)
+??  ?????? components/       # React components
+??  ?????? lib/              # API client & types
+??  ?????? mocks/            # MSW handlers
+?????? docs/
+??  ?????? API_SPEC.md       # Complete API documentation
+?????? tests/                # Python tests
+?????? docker-compose.yml
+?????? api/requirements.txt
 ```
 
 ## Features
 
-### Dashboard
-- Overview of all datasets
-- Filter by status (PASS/WARN/BLOCK)
-- Quick status indicators
-- Drill-down navigation
+### Dashboard (NEW & ENHANCED)
+- **Real-time statistics cards** with brand colors
+- **Search functionality** with instant filtering
+- **Advanced status filters** (PASS/WARN/BLOCK)
+- **Live data refresh** (30s intervals)
+- **Create Dataset** quick action button
+- **Empty states** with call-to-action
 
 ### Version Timeline
 - Visual history of dataset versions
@@ -114,11 +116,21 @@ Full specification: `docs/API_SPEC.md`
 - L1/L2 validation results
 - Gemini judgment summaries
 
-### Semantic Audit Report
-- Drift statistics visualization
-- Gemini reasoning trace
-- Flagged samples
-- Confidence scores
+### Semantic Audit Report (ENHANCED)
+- **Drift gauge chart** with dynamic brand colors
+- **Real images** of flagged samples with outlier scores
+- **Image lightbox** for detailed inspection
+- **Gemini reasoning trace** in brand-purple cards
+- **Distance metrics** (V1/V2 means)
+- **Confidence scores** with visual indicators
+
+### Sample Browser (NEW)
+- **Grid view** of all dataset samples
+- **Image thumbnails** with captions
+- **Click to enlarge** with metadata overlay
+- **Lazy loading** for performance
+- **Source ID** and status indicators
+- **Quick navigation** to audit and lineage
 
 ### Lineage & Root Cause Analysis
 - Data flow visualization
@@ -126,15 +138,25 @@ Full specification: `docs/API_SPEC.md`
 - Interactive filtering by source
 - RCA recommendations
 
-### Control Plane
-- Manual override capabilities
-- Re-ingestion triggers
-- L2 audit initiation
-- Action history log
+### Dataset Creation (NEW)
+- **Form-based input** with validation
+- **JSON input mode** for bulk upload
+- **Tag management** with visual tags
+- **Multiple samples** support
+- **Real-time feedback** with toast notifications
+
+### Control Plane (FULLY FUNCTIONAL)
+- **Dataset/version selection** dropdowns
+- **Real API integration** (no mocks)
+- **Manual override** to PASS/WARN/BLOCK
+- **Re-ingestion triggers**
+- **L2 audit initiation**
+- **Action history log** with timestamps
+- **Toast notifications** for all operations
 
 ## Data Flow
 
-1. **Ingestion**: Raw data → Embeddings → Vector DB
+1. **Ingestion**: Raw data ??Embeddings ??Vector DB
 2. **L1 Validation**: Rule-based checks (schema, volume, freshness)
 3. **L2 Audit**: Semantic drift analysis using Gemini
 4. **Decision**: PASS/WARN/BLOCK status
@@ -154,7 +176,7 @@ Full specification: `docs/API_SPEC.md`
 
 ```bash
 # Install dependencies
-pip install -r requirements.txt
+pip install -r api/requirements.txt -r api/requirements.ml.txt
 
 # Run tests
 python -m pytest tests/
@@ -296,7 +318,7 @@ docker-compose restart qdrant
 
 ## License
 
-Copyright © 2026 AlignOps
+Copyright ? 2026 AlignOps
 
 ## Support
 

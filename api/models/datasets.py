@@ -64,3 +64,14 @@ class DatasetObject(BaseModel):
 
     class Config:
         use_enum_values = True
+
+
+class RawDataItem(BaseModel):
+    image_url: str
+    caption: str
+    source_id: str
+
+
+class CreateDatasetRequest(BaseModel):
+    dataset: DatasetObject
+    raw_data: List[RawDataItem]

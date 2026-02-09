@@ -20,7 +20,16 @@ logger = logging.getLogger(__name__)
 
 class QdrantService:
     def __init__(self):
-        self.client = QdrantClient(url=os.getenv("QDRANT_URL", "http://qdrant:6333"))
+        qdrant_url = os.getenv("QDRANT_URL", "http://qdrant:6333")
+        qdrant_api_key = os.getenv("QDRANT_API_KEY")
+        
+        if qdrant_api_key:
+            # Qdrant Cloud with API key authentication
+            self.client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
+        else:
+            # Local Qdrant without authentication
+            self.client = QdrantClient(url=qdrant_url)
+        
         self.collection_name = "alignops_vectors"
 
     def init_collection(self, vector_size: int = 768):

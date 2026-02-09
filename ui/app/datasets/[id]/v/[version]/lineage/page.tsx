@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ChevronRight, AlertCircle } from "lucide-react";
-import { useState } from "react";
+import { use, useState } from "react";
 import { cn } from "@/lib/utils";
 
 function LineageSkeleton() {
@@ -23,16 +23,17 @@ function LineageSkeleton() {
 export default function LineagePage({
   params,
 }: {
-  params: { id: string; version: string };
+  params: Promise<{ id: string; version: string }>;
 }) {
+  const { id, version } = use(params);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
 
   const { data: versions, isLoading } = useQuery({
-    queryKey: ["dataset-versions", params.id],
-    queryFn: () => getDatasetVersions(params.id),
+    queryKey: ["dataset-versions", id],
+    queryFn: () => getDatasetVersions(id),
   });
 
-  const currentVersion = versions?.find((v) => v.version === params.version);
+  const currentVersion = versions?.find((v) => v.version === version);
   const l2 = currentVersion?.l2_reasoning;
 
   if (!isLoading && !currentVersion) {
@@ -64,7 +65,7 @@ export default function LineagePage({
     },
     {
       id: "current",
-      label: `Current (${params.version})`,
+      label: `Current (${version})`,
       type: "output",
       errorContribution: 0,
     },
@@ -80,15 +81,15 @@ export default function LineagePage({
         >
           Home
         </Link>
-        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
         <Link
-          href={`/datasets/${params.id}`}
+          href={`/datasets/${id}`}
           className="hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded px-1"
         >
-          {params.id}
+          {id}
         </Link>
         <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        <span className="text-slate-900 font-medium">Lineage: {params.version}</span>
+        <span className="text-slate-900 font-medium">Lineage: {version}</span>
       </nav>
 
       <div className="mb-8">
@@ -97,7 +98,7 @@ export default function LineagePage({
           {currentVersion && <StatusBadge status={currentVersion.status} />}
         </div>
         <p className="text-slate-500">
-          Trace data flow and identify error sources for {params.id} {params.version}
+          Trace data flow and identify error sources for {id} {version}
         </p>
       </div>
 
@@ -129,13 +130,13 @@ export default function LineagePage({
                         className={cn(
                           "relative rounded-lg p-6 border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                           node.type === "source" &&
-                            "cursor-pointer hover:border-primary hover:shadow-md",
+                            "cursor-pointer hover:border-brand-sage hover:shadow-md",
                           node.type !== "source" && "cursor-default",
                           node.errorContribution > 0.5
-                            ? "bg-rose-50 border-rose-300"
+                            ? "bg-brand-coral/10 border-brand-coral/30"
                             : node.errorContribution > 0.2
-                              ? "bg-amber-50 border-amber-300"
-                              : "bg-slate-50 border-slate-300"
+                              ? "bg-brand-cream/50 border-brand-cream"
+                              : "bg-brand-sky/10 border-brand-sky/30"
                         )}
                       >
                         <div className="text-center">
@@ -150,7 +151,7 @@ export default function LineagePage({
                         </div>
                         {/* Error heatmap indicator */}
                         {node.errorContribution > 0 && (
-                          <div className="absolute -top-2 -right-2 bg-rose-600 text-white text-xs px-2 py-1 rounded-full font-medium shadow">
+                          <div className="absolute -top-2 -right-2 bg-brand-coral text-white text-xs px-2 py-1 rounded-full font-medium shadow-md">
                             {(node.errorContribution * 100).toFixed(0)}%
                           </div>
                         )}
@@ -169,20 +170,20 @@ export default function LineagePage({
 
           {/* Root Cause Analysis Card */}
           {l2?.reasoning_trace.recommended_action && (
-            <Card className="border-rose-200 bg-rose-50/50">
+            <Card className="border-brand-coral/30 bg-brand-coral/5">
               <CardHeader>
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-rose-600 mt-0.5" aria-hidden="true" />
+                  <AlertCircle className="h-5 w-5 text-brand-coral mt-0.5" aria-hidden="true" />
                   <div className="flex-1">
-                    <CardTitle className="text-rose-900">Root Cause Analysis</CardTitle>
-                    <CardDescription className="text-rose-700">
+                    <CardTitle className="text-brand-coral">Root Cause Analysis</CardTitle>
+                    <CardDescription className="text-slate-600">
                       Gemini&apos;s conclusion and recommended action
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="bg-white rounded-lg p-4 border border-rose-200">
+                <div className="bg-white rounded-lg p-4 border border-brand-coral/20">
                   <p className="text-sm text-slate-900 mb-4">
                     <strong>Conclusion:</strong> {l2.reasoning_trace.summary}
                   </p>

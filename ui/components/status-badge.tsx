@@ -13,17 +13,17 @@ const statusConfig = {
   PASS: {
     label: "Pass",
     icon: CheckCircle,
-    className: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    className: "bg-brand-sage/20 text-brand-forest border-brand-sage",
   },
   WARN: {
     label: "Warn",
     icon: AlertTriangle,
-    className: "bg-amber-100 text-amber-700 border-amber-200",
+    className: "bg-brand-cream text-amber-700 border-amber-200",
   },
   BLOCK: {
     label: "Block",
     icon: XCircle,
-    className: "bg-rose-100 text-rose-700 border-rose-200",
+    className: "bg-brand-coral/10 text-destructive border-brand-coral/30",
   },
   PENDING: {
     label: "Pending",
@@ -33,7 +33,7 @@ const statusConfig = {
   VALIDATING: {
     label: "Validating…",
     icon: Loader2,
-    className: "bg-blue-100 text-blue-700 border-blue-200",
+    className: "bg-brand-sky/20 text-blue-700 border-brand-sky/50",
   },
 } as const;
 

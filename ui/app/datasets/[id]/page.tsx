@@ -9,6 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/empty-state";
+import { use } from "react";
+import { GitBranch } from "lucide-react";
 
 function TimelineSkeleton() {
   return (
@@ -23,10 +26,12 @@ function TimelineSkeleton() {
   );
 }
 
-export default function DatasetVersionsPage({ params }: { params: { id: string } }) {
+export default function DatasetVersionsPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+
   const { data: versions, isLoading } = useQuery({
-    queryKey: ["dataset-versions", params.id],
-    queryFn: () => getDatasetVersions(params.id),
+    queryKey: ["dataset-versions", id],
+    queryFn: () => getDatasetVersions(id),
   });
 
   const sortedVersions = versions?.sort((a, b) =>
@@ -44,24 +49,24 @@ export default function DatasetVersionsPage({ params }: { params: { id: string }
           Home
         </Link>
         <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        <span className="text-slate-900 font-medium">Dataset: {params.id}</span>
+        <span className="text-slate-900 font-medium">Dataset: {id}</span>
       </nav>
 
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900 mb-2">Version Timeline</h1>
         <p className="text-slate-500">
-          View the history and evolution of dataset {params.id}
+          View the history and evolution of dataset {id}
         </p>
       </div>
 
       {isLoading ? (
         <TimelineSkeleton />
       ) : !sortedVersions || sortedVersions.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-slate-500">No versions found for this dataset.</p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={GitBranch}
+          title="No versions found"
+          description="This dataset doesn't have any versions yet. Create a new version to get started."
+        />
       ) : (
         <div className="max-w-4xl">
           {/* Timeline */}
@@ -87,11 +92,11 @@ export default function DatasetVersionsPage({ params }: { params: { id: string }
                         <div
                           className={cn(
                             "h-12 w-12 rounded-full border-4 border-white flex items-center justify-center text-sm font-bold shadow-md z-10 relative",
-                            version.status === "PASS" && "bg-emerald-100 text-emerald-700",
-                            version.status === "WARN" && "bg-amber-100 text-amber-700",
-                            version.status === "BLOCK" && "bg-rose-100 text-rose-700",
+                            version.status === "PASS" && "bg-brand-cream/40 text-emerald-700",
+                            version.status === "WARN" && "bg-brand-cream text-amber-700",
+                            version.status === "BLOCK" && "bg-brand-coral/10 text-brand-coral",
                             (version.status === "PENDING" || version.status === "VALIDATING") &&
-                              "bg-slate-100 text-slate-700"
+                              "bg-brand-sage/30 text-brand-forest"
                           )}
                         >
                           {version.version}
@@ -142,11 +147,11 @@ export default function DatasetVersionsPage({ params }: { params: { id: string }
 
                           {/* L2 Reasoning Summary */}
                           {version.l2_reasoning && (
-                            <div className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-100">
-                              <p className="text-sm font-medium text-blue-900 mb-2">
+                            <div className="bg-brand-sky/10 rounded-lg p-4 mb-4 border border-brand-sky/30">
+                              <p className="text-sm font-medium text-blue-700 mb-2">
                                 Gemini Analysis Summary
                               </p>
-                              <p className="text-sm text-blue-800">
+                              <p className="text-sm text-slate-700">
                                 {version.l2_reasoning.judgment_summary}
                               </p>
                             </div>
@@ -158,14 +163,14 @@ export default function DatasetVersionsPage({ params }: { params: { id: string }
                               <>
                                 <Button variant="outline" size="sm" asChild>
                                   <Link
-                                    href={`/datasets/${params.id}/v/${version.version}/audit`}
+                                    href={`/datasets/${id}/v/${version.version}/audit`}
                                   >
                                     View Audit Report
                                   </Link>
                                 </Button>
                                 <Button variant="outline" size="sm" asChild>
                                   <Link
-                                    href={`/datasets/${params.id}/v/${version.version}/lineage`}
+                                    href={`/datasets/${id}/v/${version.version}/lineage`}
                                   >
                                     View Lineage
                                   </Link>
@@ -180,7 +185,7 @@ export default function DatasetVersionsPage({ params }: { params: { id: string }
                     {/* Drift hint between versions */}
                     {showDriftHint && (
                       <div className="ml-6 mt-4 mb-4 pl-6">
-                        <div className="inline-block bg-slate-100 text-slate-700 text-xs px-3 py-1 rounded-full border border-slate-200">
+                        <div className="inline-block bg-brand-sage/20 text-brand-forest text-xs px-3 py-1 rounded-full border border-brand-sage/40">
                           Drift Analysis Available ↓
                         </div>
                       </div>

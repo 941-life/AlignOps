@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { listAllDatasets } from "@/lib/api-client";
+import { listAllDatasets, getDatasetStats } from "@/lib/api-client";
+import { useAllDatasetsPolling, useDatasetStatsPolling } from "@/hooks/use-polling";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,11 +15,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { StatCard } from "@/components/stat-card";
+import { EmptyState } from "@/components/empty-state";
 import Link from "next/link";
-import { useState } from "react";
+import { Suspense, useState, useMemo } from "react";
 import type { StatusEnum } from "@/lib/types";
 import { useSearchParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { CheckCircle, AlertTriangle, XCircle, Database, Search, RefreshCw, Play, ArrowRight } from "lucide-react";
+import { DemoLoader } from "@/components/demo-loader";
 
 type FilterStatus = "ALL" | StatusEnum;
 
@@ -46,21 +52,38 @@ function DashboardSkeleton() {
   );
 }
 
-export default function DashboardPage() {
+function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlFilter = (searchParams.get("status") as FilterStatus) || "ALL";
   const [filter, setFilter] = useState<FilterStatus>(urlFilter);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const { data: datasets, isLoading } = useQuery({
-    queryKey: ["datasets"],
-    queryFn: listAllDatasets,
+  // Real-time polling for datasets (every 3 seconds)
+  const { data: datasets, isLoading, isPolling } = useAllDatasetsPolling({
+    interval: 3000,
+    enabled: true,
   });
 
-  const filteredDatasets = datasets?.filter((ds) => {
-    if (filter === "ALL") return true;
-    return ds.status === filter;
+  // Real-time polling for stats (every 5 seconds)
+  const { data: stats, isPolling: isStatsPolling } = useDatasetStatsPolling({
+    interval: 5000,
+    enabled: true,
   });
+
+  const filteredDatasets = useMemo(() => {
+    return datasets?.filter((ds) => {
+      // Status filter
+      if (filter !== "ALL" && ds.status !== filter) return false;
+      
+      // Search filter
+      if (searchQuery && !ds.dataset_id.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [datasets, filter, searchQuery]);
 
   const blockCount = datasets?.filter((ds) => ds.status === "BLOCK").length || 0;
 
@@ -87,48 +110,162 @@ export default function DashboardPage() {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              Datasets Control Tower
-            </h1>
-            <p className="text-slate-500">
-              {datasets?.length || 0} total datasets
-              {blockCount > 0 && (
-                <span className="ml-2">
-                  &bull; <span className="text-rose-700 font-medium">{blockCount} blocked</span>
-                </span>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold text-slate-900">
+                Datasets Control Tower
+              </h1>
+              {(isPolling || isStatsPolling) && (
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <RefreshCw className="h-4 w-4 animate-spin text-brand-sage" aria-hidden="true" />
+                  <span className="text-xs">Live</span>
+                </div>
               )}
+            </div>
+            <p className="text-slate-500">
+              Monitor and manage dataset validation status (auto-refreshes every 3s)
             </p>
           </div>
+          <Button asChild>
+            <Link href="/datasets/new">
+              Create Dataset
+            </Link>
+          </Button>
         </div>
 
-        {/* Filter buttons */}
-        <div className="flex gap-2 mb-6" role="group" aria-label="Filter datasets by status">
-          {filters.map((f) => (
-            <Button
-              key={f.value}
-              variant={filter === f.value ? "default" : "outline"}
-              size="sm"
-              onClick={() => handleFilterChange(f.value)}
-              aria-pressed={filter === f.value}
-            >
-              {f.label}
-            </Button>
-          ))}
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <StatCard 
+            title="Total Datasets" 
+            value={stats?.total || datasets?.length || 0}
+            icon={Database}
+            color="blue"
+          />
+          <StatCard 
+            title="Pass" 
+            value={stats?.by_status.PASS || datasets?.filter(d => d.status === "PASS").length || 0}
+            icon={CheckCircle}
+            color="emerald"
+          />
+          <StatCard 
+            title="Warn" 
+            value={stats?.by_status.WARN || datasets?.filter(d => d.status === "WARN").length || 0}
+            icon={AlertTriangle}
+            color="amber"
+          />
+          <StatCard 
+            title="Block" 
+            value={stats?.by_status.BLOCK || blockCount}
+            icon={XCircle}
+            color="rose"
+          />
+        </div>
+
+        {/* Search and Filter */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" aria-hidden="true" />
+            <Input
+              placeholder="Search datasets..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+              aria-label="Search datasets"
+            />
+          </div>
+          <div className="flex gap-2" role="group" aria-label="Filter datasets by status">
+            {filters.map((f) => (
+              <Button
+                key={f.value}
+                variant={filter === f.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleFilterChange(f.value)}
+                aria-pressed={filter === f.value}
+              >
+                {f.label}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 
       {isLoading ? (
         <DashboardSkeleton />
       ) : !filteredDatasets || filteredDatasets.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-slate-500">
-              {filter === "ALL"
-                ? "No datasets found. Create your first dataset to get started."
-                : `No datasets with status "${filter}".`}
-            </p>
-          </CardContent>
-        </Card>
+        <div className="space-y-8">
+          {/* Hero Section for first-time visitors */}
+          {filter === "ALL" && !searchQuery && (
+            <>
+              <Card className="border-2 border-brand-sage/20 bg-gradient-to-br from-white via-brand-sage/5 to-brand-sky/5">
+                <CardContent className="pt-12 pb-12">
+                  <div className="max-w-3xl mx-auto text-center space-y-6">
+                    <div className="inline-block p-3 bg-brand-sage/10 rounded-full mb-4">
+                      <Play className="h-8 w-8 text-brand-sage" />
+                    </div>
+                    <h1 className="text-4xl font-bold text-slate-900 mb-4">
+                      Welcome to AlignOps
+                    </h1>
+                    <p className="text-xl text-slate-600 mb-6">
+                      Automated Dataset Quality Control with AI-Powered Semantic Drift Detection
+                    </p>
+                    <div className="grid md:grid-cols-3 gap-6 text-left mt-8">
+                      <div className="space-y-2">
+                        <div className="text-3xl font-bold text-brand-sage">L1</div>
+                        <div className="text-sm font-medium text-slate-900">Schema Validation</div>
+                        <div className="text-xs text-slate-500">Automatic checks for data quality, volume, and freshness</div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-3xl font-bold text-brand-sky">L2</div>
+                        <div className="text-sm font-medium text-slate-900">Semantic Analysis</div>
+                        <div className="text-xs text-slate-500">Gemini AI detects meaning shifts between versions</div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-3xl font-bold text-brand-forest">RCA</div>
+                        <div className="text-sm font-medium text-slate-900">Root Cause Analysis</div>
+                        <div className="text-xs text-slate-500">Pinpoint exact sources of data drift</div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Demo Loader */}
+              <div className="max-w-2xl mx-auto">
+                <DemoLoader onComplete={() => router.refresh()} />
+              </div>
+
+              {/* Alternative: Manual Creation */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Or Create Your Own Dataset</CardTitle>
+                  <CardDescription>
+                    Upload your own data to start validation
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button asChild variant="outline" className="w-full" size="lg">
+                    <Link href="/datasets/new">
+                      <Database className="mr-2 h-4 w-4" />
+                      Create Custom Dataset
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Filtered empty state */}
+          {(filter !== "ALL" || searchQuery) && (
+            <EmptyState
+              icon={Database}
+              title="No matching datasets"
+              description={
+                searchQuery
+                  ? `No datasets matching "${searchQuery}". Try a different search term.`
+                  : `No datasets with status "${filter}". Try a different filter.`
+              }
+            />
+          )}
+        </div>
       ) : (
         <Card>
           <CardHeader>
@@ -153,7 +290,7 @@ export default function DashboardPage() {
                   <TableRow
                     key={dataset.dataset_id}
                     className={cn(
-                      dataset.status === "BLOCK" && "bg-rose-50 hover:bg-rose-50/80"
+                      dataset.status === "BLOCK" && "bg-brand-coral/5 hover:bg-brand-coral/10"
                     )}
                   >
                     <TableCell className="font-medium">
@@ -165,7 +302,7 @@ export default function DashboardPage() {
                       </Link>
                     </TableCell>
                     <TableCell className="font-variant-tabular">
-                      {dataset.latest_version}
+                      {dataset.version}
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={dataset.status} />
@@ -174,7 +311,7 @@ export default function DashboardPage() {
                       {new Intl.DateTimeFormat("en-US", {
                         dateStyle: "medium",
                         timeStyle: "short",
-                      }).format(new Date(dataset.last_evaluated))}
+                      }).format(new Date(dataset.created_at))}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="outline" size="sm" asChild>
@@ -191,6 +328,20 @@ export default function DashboardPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container mx-auto px-4 py-8">
+          <DashboardSkeleton />
+        </div>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }
 

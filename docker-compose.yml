@@ -1,13 +1,13 @@
 services:
   api:
     build:
-      context: .
+      context: ./api
       dockerfile: Dockerfile.api
     container_name: dataops-api
     depends_on:
       - qdrant
     ports:
-      - "8000:8000"
+      - "8000:8080"
     env_file: .env
     networks:
       - dataops-network
@@ -15,7 +15,7 @@ services:
   ui:
     build:
       context: ./ui
-      dockerfile: ../Dockerfile.ui
+      dockerfile: Dockerfile.ui
     container_name: dataops-ui
     ports:
       - "3000:3000"

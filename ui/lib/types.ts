@@ -88,3 +88,31 @@ export interface OutlierSample {
   outlier_score: number;
 }
 
+export interface SampleWithMetadata {
+  image_url: string;
+  caption: string;
+  source_id: string;
+  image_fetch_status?: string;
+  fallback_used: boolean;
+}
+
+export interface DatasetStatistics {
+  total: number;
+  by_status: {
+    PASS: number;
+    WARN: number;
+    BLOCK: number;
+    VALIDATING: number;
+    PENDING: number;
+  };
+  recent_activity: Array<{
+    dataset_id: string;
+    version: string;
+    status: StatusEnum;
+    timestamp: string;
+  }>;
+}
+
+export interface ManualOverrideRequest {
+  override_status: StatusEnum;
+}

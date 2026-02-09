@@ -2,11 +2,18 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { listAllDatasets, manualOverride, triggerReingestion, triggerL2Audit } from "@/lib/api-client";
+import { Loader2, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
+import type { StatusEnum } from "@/lib/types";
 
 export default function ControlPlanePage() {
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedDataset, setSelectedDataset] = useState<string>("");
+  const [selectedVersion, setSelectedVersion] = useState<string>("");
   const [actionHistory, setActionHistory] = useState<
     Array<{
       action: string;
@@ -14,31 +21,118 @@ export default function ControlPlanePage() {
       status: "success" | "error";
       message: string;
     }>
-  >([
-    {
-      action: "Manual Override",
-      timestamp: "2026-02-07T15:30:00Z",
-      status: "success",
-      message: "Dataset sdv-vision v1 manually approved for production",
-    },
-  ]);
+  >([]);
 
-  const handleAction = async (actionName: string) => {
-    setIsProcessing(true);
-    
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    const newAction = {
-      action: actionName,
-      timestamp: new Date().toISOString(),
-      status: "success" as const,
-      message: `${actionName} completed successfully`,
-    };
-    
-    setActionHistory([newAction, ...actionHistory]);
-    setIsProcessing(false);
+  const queryClient = useQueryClient();
+
+  const { data: datasets } = useQuery({
+    queryKey: ["datasets"],
+    queryFn: listAllDatasets,
+  });
+
+  const overrideMutation = useMutation({
+    mutationFn: ({ datasetId, version, action }: { datasetId: string; version: string; action: StatusEnum }) =>
+      manualOverride(datasetId, version, action),
+    onSuccess: (data, variables) => {
+      toast.success(`Successfully overrode ${variables.datasetId} ${variables.version} to ${variables.action}`);
+      queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      queryClient.invalidateQueries({ queryKey: ["dataset-versions", variables.datasetId] });
+      
+      setActionHistory([
+        {
+          action: `Manual Override to ${variables.action}`,
+          timestamp: new Date().toISOString(),
+          status: "success",
+          message: `Dataset ${variables.datasetId} ${variables.version} manually set to ${variables.action}`,
+        },
+        ...actionHistory,
+      ]);
+    },
+    onError: (error: any) => {
+      toast.error(`Override failed: ${error.message}`);
+      setActionHistory([
+        {
+          action: "Manual Override",
+          timestamp: new Date().toISOString(),
+          status: "error",
+          message: error.message || "Override failed",
+        },
+        ...actionHistory,
+      ]);
+    },
+  });
+
+  const reingestMutation = useMutation({
+    mutationFn: ({ datasetId, version }: { datasetId: string; version: string }) =>
+      triggerReingestion(datasetId, version),
+    onSuccess: (data, variables) => {
+      toast.success(`Re-ingestion triggered for ${variables.datasetId} ${variables.version}`);
+      queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      queryClient.invalidateQueries({ queryKey: ["dataset-versions", variables.datasetId] });
+      
+      setActionHistory([
+        {
+          action: "Re-ingest Dataset",
+          timestamp: new Date().toISOString(),
+          status: "success",
+          message: `Re-ingestion triggered for ${variables.datasetId} ${variables.version}`,
+        },
+        ...actionHistory,
+      ]);
+    },
+    onError: (error: any) => {
+      toast.error(`Re-ingestion failed: ${error.message}`);
+    },
+  });
+
+  const l2AuditMutation = useMutation({
+    mutationFn: ({ datasetId, version }: { datasetId: string; version: string }) =>
+      triggerL2Audit(datasetId, version),
+    onSuccess: (data, variables) => {
+      toast.success(`L2 Audit completed for ${variables.datasetId} ${variables.version}`);
+      queryClient.invalidateQueries({ queryKey: ["datasets"] });
+      queryClient.invalidateQueries({ queryKey: ["dataset-versions", variables.datasetId] });
+      
+      setActionHistory([
+        {
+          action: "Trigger L2 Audit",
+          timestamp: new Date().toISOString(),
+          status: "success",
+          message: `L2 Audit completed for ${variables.datasetId} ${variables.version}`,
+        },
+        ...actionHistory,
+      ]);
+    },
+    onError: (error: any) => {
+      toast.error(`L2 Audit failed: ${error.message}`);
+    },
+  });
+
+  const handleManualOverride = (action: StatusEnum) => {
+    if (!selectedDataset || !selectedVersion) {
+      toast.error("Please select a dataset and version");
+      return;
+    }
+    overrideMutation.mutate({ datasetId: selectedDataset, version: selectedVersion, action });
   };
+
+  const handleReingest = () => {
+    if (!selectedDataset || !selectedVersion) {
+      toast.error("Please select a dataset and version");
+      return;
+    }
+    reingestMutation.mutate({ datasetId: selectedDataset, version: selectedVersion });
+  };
+
+  const handleTriggerL2 = () => {
+    if (!selectedDataset || !selectedVersion) {
+      toast.error("Please select a dataset and version");
+      return;
+    }
+    l2AuditMutation.mutate({ datasetId: selectedDataset, version: selectedVersion });
+  };
+
+  const isProcessing = overrideMutation.isPending || reingestMutation.isPending || l2AuditMutation.isPending;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -59,6 +153,38 @@ export default function ControlPlanePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Dataset Selection */}
+            <div className="space-y-3 pb-4 border-b border-slate-200">
+              <div className="space-y-2">
+                <Label htmlFor="dataset-select">Dataset</Label>
+                <Select value={selectedDataset} onValueChange={setSelectedDataset}>
+                  <SelectTrigger id="dataset-select">
+                    <SelectValue placeholder="Select a dataset" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {datasets?.map((ds) => (
+                      <SelectItem key={ds.dataset_id} value={ds.dataset_id}>
+                        {ds.dataset_id} ({ds.latest_version})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="version-input">Version</Label>
+                <Select value={selectedVersion} onValueChange={setSelectedVersion}>
+                  <SelectTrigger id="version-input">
+                    <SelectValue placeholder="Enter version (e.g., v1, v2)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="v1">v1</SelectItem>
+                    <SelectItem value="v2">v2</SelectItem>
+                    <SelectItem value="v3">v3</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="space-y-3">
               <div>
                 <h3 className="text-sm font-medium text-slate-900 mb-2">
@@ -67,10 +193,10 @@ export default function ControlPlanePage() {
                 <Button
                   className="w-full"
                   variant="outline"
-                  onClick={() => handleAction("Re-ingest Dataset")}
-                  disabled={isProcessing}
+                  onClick={handleReingest}
+                  disabled={isProcessing || !selectedDataset || !selectedVersion}
                 >
-                  {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {reingestMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Re-ingest Dataset
                 </Button>
               </div>
@@ -83,19 +209,31 @@ export default function ControlPlanePage() {
                   <Button
                     className="w-full"
                     variant="outline"
-                    onClick={() => handleAction("Manual PASS Override")}
-                    disabled={isProcessing}
+                    onClick={() => handleManualOverride("PASS")}
+                    disabled={isProcessing || !selectedDataset || !selectedVersion}
                   >
-                    {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {overrideMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <CheckCircle className="mr-2 h-4 w-4" aria-hidden="true" />
                     Override to PASS
                   </Button>
                   <Button
                     className="w-full"
                     variant="outline"
-                    onClick={() => handleAction("Manual BLOCK Override")}
-                    disabled={isProcessing}
+                    onClick={() => handleManualOverride("WARN")}
+                    disabled={isProcessing || !selectedDataset || !selectedVersion}
                   >
-                    {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {overrideMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <AlertTriangle className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Override to WARN
+                  </Button>
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => handleManualOverride("BLOCK")}
+                    disabled={isProcessing || !selectedDataset || !selectedVersion}
+                  >
+                    {overrideMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <XCircle className="mr-2 h-4 w-4" aria-hidden="true" />
                     Override to BLOCK
                   </Button>
                 </div>
@@ -108,10 +246,10 @@ export default function ControlPlanePage() {
                 <Button
                   className="w-full"
                   variant="outline"
-                  onClick={() => handleAction("Trigger L2 Audit")}
-                  disabled={isProcessing}
+                  onClick={handleTriggerL2}
+                  disabled={isProcessing || !selectedDataset || !selectedVersion}
                 >
-                  {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {l2AuditMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Trigger L2 Audit
                 </Button>
               </div>

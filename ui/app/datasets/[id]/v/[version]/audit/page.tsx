@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getDatasetVersions } from "@/lib/api-client";
+import { getDatasetVersions, getOutlierSamples } from "@/lib/api-client";
+import { useDatasetPolling } from "@/hooks/use-polling";
 import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -11,9 +12,16 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ImageLightbox } from "@/components/image-lightbox";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from "recharts";
+import { use, useState } from "react";
+import Image from "next/image";
+import type { OutlierSample } from "@/lib/types";
+import { EmptyState } from "@/components/empty-state";
+import { FileQuestion, RefreshCw } from "lucide-react";
+import { VectorVisualization } from "@/components/vector-visualization";
 
 function AuditSkeleton() {
   return (
@@ -27,24 +35,44 @@ function AuditSkeleton() {
 export default function AuditPage({
   params,
 }: {
-  params: { id: string; version: string };
+  params: Promise<{ id: string; version: string }>;
 }) {
-  const { data: versions, isLoading } = useQuery({
-    queryKey: ["dataset-versions", params.id],
-    queryFn: () => getDatasetVersions(params.id),
+  const { id, version } = use(params);
+  const [selectedImage, setSelectedImage] = useState<OutlierSample | null>(null);
+
+  // Poll for dataset version status changes (stops when PASS, WARN, or BLOCK)
+  const { data: currentVersion, isPolling } = useDatasetPolling(id, version, {
+    interval: 3000,
+    stopOnStatus: ['PASS', 'WARN', 'BLOCK'],
   });
 
-  const currentVersion = versions?.find((v) => v.version === params.version);
-  const l2 = currentVersion?.l2_reasoning;
+  const { data: versions, isLoading } = useQuery({
+    queryKey: ["dataset-versions", id],
+    queryFn: () => getDatasetVersions(id),
+  });
 
-  if (!isLoading && !currentVersion) {
+  const { data: outlierSamples, isLoading: isLoadingOutliers } = useQuery({
+    queryKey: ["outliers", id, version],
+    queryFn: () => getOutlierSamples(id, version, 10),
+    enabled: !!id && !!version,
+  });
+
+  // Use polled data if available, otherwise fallback to versions list
+  const versionData = currentVersion || versions?.find((v) => v.version === version);
+  const l2 = versionData?.l2_reasoning;
+
+  if (!isLoading && !versionData) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-slate-500">Version not found.</p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={FileQuestion}
+          title="Version not found"
+          description={`Version ${version} was not found in dataset ${id}. Please check the URL or navigate back to the dataset timeline.`}
+          action={{
+            label: "Go to Dataset Timeline",
+            onClick: () => window.location.href = `/datasets/${id}`
+          }}
+        />
       </div>
     );
   }
@@ -54,7 +82,7 @@ export default function AuditPage({
     {
       name: "Drift",
       value: cosineMeanShift * 100,
-      fill: cosineMeanShift > 0.3 ? "#dc2626" : cosineMeanShift > 0.15 ? "#f59e0b" : "#10b981",
+      fill: cosineMeanShift > 0.3 ? "#FF5B5B" : cosineMeanShift > 0.15 ? "#F0FFC3" : "#9CCFFF",
     },
   ];
 
@@ -68,37 +96,51 @@ export default function AuditPage({
         >
           Home
         </Link>
-        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
         <Link
-          href={`/datasets/${params.id}`}
+          href={`/datasets/${id}`}
           className="hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded px-1"
         >
-          {params.id}
+          {id}
         </Link>
         <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        <span className="text-slate-900 font-medium">Audit: {params.version}</span>
+        <span className="text-slate-900 font-medium">Audit: {version}</span>
       </nav>
 
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <h1 className="text-3xl font-bold text-slate-900">Semantic Audit Report</h1>
-          {currentVersion && <StatusBadge status={currentVersion.status} />}
+          {versionData && <StatusBadge status={versionData.status} />}
+          {isPolling && (
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <RefreshCw className="h-3 w-3 animate-spin text-brand-sage" aria-hidden="true" />
+              <span className="text-xs">Polling</span>
+            </div>
+          )}
         </div>
         <p className="text-slate-500">
-          L2 analysis for {params.id} {params.version}
+          L2 analysis for {id} {version}
         </p>
       </div>
 
       {isLoading ? (
         <AuditSkeleton />
       ) : !l2 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-slate-500">No L2 audit data available for this version.</p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={FileQuestion}
+          title="No L2 audit data"
+          description="This version hasn't been audited yet. Trigger an L2 audit from the Control Plane to see semantic analysis results."
+        />
       ) : (
         <div className="space-y-6">
+          {/* Vector Visualization - Full Width */}
+          {outlierSamples && outlierSamples.length > 0 && (
+            <VectorVisualization 
+              outliers={outlierSamples} 
+              cosineDrift={cosineMeanShift} 
+            />
+          )}
+
           {/* Two-column layout */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left: Stats */}
@@ -171,12 +213,12 @@ export default function AuditPage({
 
             {/* Right: Reasoning */}
             <div className="space-y-6">
-              <Card className="bg-blue-50 border-blue-200">
+              <Card className="bg-brand-sky/10 border-brand-sky/30">
                 <CardHeader>
-                  <CardTitle className="text-blue-900">Gemini Judgment</CardTitle>
+                  <CardTitle className="text-blue-700">Gemini Judgment</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-blue-800">{l2.judgment_summary}</p>
+                  <p className="text-slate-800">{l2.judgment_summary}</p>
                 </CardContent>
               </Card>
 
@@ -230,8 +272,8 @@ export default function AuditPage({
             </div>
           </div>
 
-          {/* Bottom: Flagged Samples */}
-          {l2.flagged_samples.length > 0 && (
+          {/* Bottom: Flagged Samples with Images */}
+          {(outlierSamples && outlierSamples.length > 0) || (l2.flagged_samples.length > 0) && (
             <Card>
               <CardHeader>
                 <CardTitle>Flagged Samples</CardTitle>
@@ -240,23 +282,85 @@ export default function AuditPage({
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {l2.flagged_samples.map((sample, i) => (
-                    <div
-                      key={i}
-                      className="border border-rose-200 rounded-lg p-4 bg-rose-50/50"
-                    >
-                      <div className="inline-block bg-rose-100 text-rose-700 text-xs px-2 py-1 rounded mb-2 font-medium">
-                        High Anomaly
+                {isLoadingOutliers ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <Skeleton key={i} className="h-64 w-full" />
+                    ))}
+                  </div>
+                ) : outlierSamples && outlierSamples.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {outlierSamples.map((sample, i) => (
+                      <div
+                        key={i}
+                        className="border border-brand-coral/20 rounded-lg overflow-hidden bg-white hover:shadow-lg hover:border-brand-coral/40 transition-all cursor-pointer"
+                        onClick={() => setSelectedImage(sample)}
+                      >
+                        <div className="relative w-full h-48 bg-gradient-to-br from-brand-sky/20 to-brand-sage/10">
+                          <Image
+                            src={sample.image_url}
+                            alt={sample.caption}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          />
+                        </div>
+                        <div className="p-4">
+                          <div className="inline-block bg-brand-coral/10 text-brand-coral text-xs px-2 py-1 rounded mb-2 font-medium font-variant-tabular border border-brand-coral/30">
+                            Score: {sample.outlier_score.toFixed(3)}
+                          </div>
+                          <p className="text-sm text-slate-700 line-clamp-2 mb-2">{sample.caption}</p>
+                          <p className="text-xs text-slate-500 font-mono">
+                            Source: {sample.source_id}
+                          </p>
+                          <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500 space-y-1">
+                            <div className="flex justify-between font-variant-tabular">
+                              <span>Dist to V1:</span>
+                              <span>{sample.dist_to_v1_mean.toFixed(3)}</span>
+                            </div>
+                            <div className="flex justify-between font-variant-tabular">
+                              <span>Dist to V2:</span>
+                              <span>{sample.dist_to_v2_mean.toFixed(3)}</span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-sm text-slate-700 font-medium">{sample}</p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {l2.flagged_samples.map((sample, i) => (
+                      <div
+                        key={i}
+                        className="border border-rose-200 rounded-lg p-4 bg-rose-50/50"
+                      >
+                        <div className="inline-block bg-rose-100 text-rose-700 text-xs px-2 py-1 rounded mb-2 font-medium">
+                          High Anomaly
+                        </div>
+                        <p className="text-sm text-slate-700 font-medium">{sample}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
         </div>
+      )}
+      
+      {selectedImage && (
+        <ImageLightbox
+          imageUrl={selectedImage.image_url}
+          caption={selectedImage.caption}
+          isOpen={!!selectedImage}
+          onClose={() => setSelectedImage(null)}
+          metadata={{
+            source_id: selectedImage.source_id,
+            outlier_score: selectedImage.outlier_score,
+            dist_to_v1_mean: selectedImage.dist_to_v1_mean,
+            dist_to_v2_mean: selectedImage.dist_to_v2_mean,
+          }}
+        />
       )}
     </div>
   );
